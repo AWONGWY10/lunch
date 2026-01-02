@@ -30,17 +30,16 @@ export const findRestaurants = async (
   const ai = new GoogleGenAI({ apiKey });
   const modelId = "gemini-2.5-flash";
 
-  // Using a cleaner prompt to focus the model on the Maps tool grounding.
-  // We rely on the toolConfig latLng to handle the precise location.
+  // Using a stronger prompt to force the model to list multiple places using the tool
   const prompt = `
-    Search for food spots and restaurants near Latitude ${coords.latitude}, Longitude ${coords.longitude}.
-    The user is looking for spots within ${filters.radius} meters.
-    Target Budget: ${filters.budget}.
+    Find at least 5 distinct food spots or restaurants near Latitude ${coords.latitude}, Longitude ${coords.longitude}.
+    Radius: ${filters.radius} meters.
+    Budget Vibe: ${filters.budget}.
     
-    CRITICAL: 
-    1. Use the Google Maps tool for ALL results. 
-    2. Provide a short, funny Gen-Z style 'vibe check' for each restaurant found.
-    3. Return local results only.
+    CRITICAL INSTRUCTIONS:
+    1. You MUST use the 'googleMaps' tool to find real locations.
+    2. Provide a list of places found.
+    3. For each place, write a short, funny Gen-Z style 'vibe check' description.
   `;
 
   try {
@@ -48,7 +47,7 @@ export const findRestaurants = async (
       model: modelId,
       contents: prompt,
       config: {
-        systemInstruction: "You are a local food guide. You use Google Maps to find restaurants near the user. Your tone is funny, high-energy, and Gen-Z (using words like 'bussing', 'no cap', 'vibe', 'lowkey'). Always prioritize grounding results from the Maps tool.",
+        systemInstruction: "You are a local food guide. Your goal is to find real places using Google Maps and describe them with high-energy, funny Gen-Z slang (e.g. 'bussing', 'no cap', 'mid', 'goated').",
         tools: [{ googleMaps: {} }],
         toolConfig: {
           retrievalConfig: {
