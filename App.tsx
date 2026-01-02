@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Coordinates, BudgetLevel, SearchFilters, Place } from './types.ts';
-import { findRestaurants } from './services/geminiService.ts';
-import FilterPanel from './components/FilterPanel.tsx';
-import PlaceCard from './components/PlaceCard.tsx';
-import RouletteModal from './components/RouletteModal.tsx';
-import Mascot from './components/Mascot.tsx';
-import BattleArena from './components/BattleArena.tsx';
-import WinnerModal from './components/WinnerModal.tsx';
+import { Coordinates, BudgetLevel, SearchFilters, Place } from './types';
+import { findRestaurants } from './services/geminiService';
+import FilterPanel from './components/FilterPanel';
+import PlaceCard from './components/PlaceCard';
+import RouletteModal from './components/RouletteModal';
+import Mascot from './components/Mascot';
+import BattleArena from './components/BattleArena';
+import WinnerModal from './components/WinnerModal';
 
 const App: React.FC = () => {
   const [coords, setCoords] = useState<Coordinates | null>(null);
