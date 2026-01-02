@@ -1,118 +1,102 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { Place } from '../types';
-import PlaceCard from './PlaceCard';
+import { Place } from '../types.ts';
+import PlaceCard from './PlaceCard.tsx';
 
 interface RouletteModalProps {
   places: Place[];
   onClose: () => void;
 }
 
+const BRAINROT_LOADING = [
+    "Cooking the results...",
+    "Querying the vibe council...",
+    "Checking if it's bussing...",
+    "Mogging the menu...",
+    "Consulting the lunch oracle...",
+];
+
 const RouletteModal: React.FC<RouletteModalProps> = ({ places, onClose }) => {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isSpinning, setIsSpinning] = useState(true);
   const [winner, setWinner] = useState<Place | null>(null);
+  const [loadingText, setLoadingText] = useState(BRAINROT_LOADING[0]);
   const audioContextRef = useRef<AudioContext | null>(null);
 
-  // Play a tick sound
   const playTick = () => {
     if (!audioContextRef.current) {
         const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-        if (AudioContextClass) {
-            audioContextRef.current = new AudioContextClass();
-        }
+        if (AudioContextClass) audioContextRef.current = new AudioContextClass();
     }
     const ctx = audioContextRef.current;
     if (!ctx) return;
-    
     if (ctx.state === 'suspended') ctx.resume();
-
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-
+    osc.connect(gain); gain.connect(ctx.destination);
     osc.type = 'triangle';
     osc.frequency.setValueAtTime(400, ctx.currentTime);
     osc.frequency.exponentialRampToValueAtTime(100, ctx.currentTime + 0.1);
-    
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.setValueAtTime(0.05, ctx.currentTime);
     gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.1);
-
-    osc.start();
-    osc.stop(ctx.currentTime + 0.1);
-  };
-
-  const playWin = () => {
-    if (!audioContextRef.current) return;
-    const ctx = audioContextRef.current;
-    
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(500, ctx.currentTime);
-    osc.frequency.linearRampToValueAtTime(800, ctx.currentTime + 0.2);
-    
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.linearRampToValueAtTime(0, ctx.currentTime + 1);
-    
-    osc.start();
-    osc.stop(ctx.currentTime + 1);
+    osc.start(); osc.stop(ctx.currentTime + 0.1);
   };
 
   useEffect(() => {
-    let speed = 50;
-    let timeoutId: ReturnType<typeof setTimeout>;
-    const totalSpins = Math.floor(Math.random() * 10) + 30; // Random number of ticks between 30 and 40
-    let currentSpinCount = 0;
+    if (places.length === 0) return;
 
+    let speed = 60;
+    let currentSpinCount = 0;
+    const totalSpins = 30 + Math.floor(Math.random() * 20);
+    
     const spin = () => {
       setCurrentIndex((prev) => (prev + 1) % places.length);
       playTick();
       currentSpinCount++;
 
+      if (currentSpinCount % 5 === 0) {
+          setLoadingText(BRAINROT_LOADING[Math.floor(Math.random() * BRAINROT_LOADING.length)]);
+      }
+
       if (currentSpinCount < totalSpins) {
-        // Decelerate
-        if (currentSpinCount > totalSpins - 10) {
-           speed *= 1.2; 
-        }
-        timeoutId = setTimeout(spin, speed);
+        // Slow down toward the end
+        if (currentSpinCount > totalSpins - 10) speed *= 1.25;
+        setTimeout(spin, speed);
       } else {
-        setIsSpinning(false);
-        setWinner(places[(currentIndex + 1) % places.length]); // Determine winner based on where it landed
-        playWin();
+        // FINISHED - Strictly set winner AFTER spinning logic
+        const finalWinner = places[currentIndex];
+        setTimeout(() => {
+            setIsSpinning(false);
+            setWinner(finalWinner);
+        }, 300);
       }
     };
 
-    timeoutId = setTimeout(spin, speed);
-
+    const timeoutId = setTimeout(spin, speed);
     return () => clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [places]);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black bg-opacity-80 backdrop-blur-sm">
-      <div className="w-full max-w-lg bg-white rounded-3xl p-8 flex flex-col items-center shadow-2xl relative overflow-hidden">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/90 backdrop-blur-xl animate-fade-in">
+      <div className={`w-full max-w-lg bg-white rounded-[2rem] p-10 flex flex-col items-center shadow-2xl transition-all duration-500 border-8 ${isSpinning ? 'border-orange-500' : 'border-green-500'}`}>
         
-        {/* Background Effects */}
-        <div className="absolute top-0 left-0 w-full h-2 bg-gradient-to-r from-red-500 via-yellow-400 to-green-500 animate-pulse"></div>
+        <div className="text-center mb-10">
+            <h2 className="text-4xl font-black mb-2 fun-font tracking-tighter uppercase italic">
+                {isSpinning ? "🎰 DECIDING FATE" : "🔥 THE VERDICT"}
+            </h2>
+            <p className="text-gray-500 font-mono text-sm animate-pulse">{isSpinning ? loadingText : "NO CAP, THIS IS THE ONE."}</p>
+        </div>
 
-        <h2 className="text-3xl font-black text-center mb-8 fun-font text-transparent bg-clip-text bg-gradient-to-r from-orange-600 to-red-600">
-          {isSpinning ? "Fate is Deciding..." : "Bon Appétit!"}
-        </h2>
-
-        <div className="w-full h-64 relative flex items-center justify-center perspective-1000">
+        <div className="w-full min-h-[250px] flex items-center justify-center">
            {isSpinning ? (
-               <div className="text-center transform transition-all duration-75 scale-110">
-                   <div className="text-6xl mb-4">🎰</div>
-                   <h3 className="text-2xl font-bold text-gray-700">{places[currentIndex].title}</h3>
+               <div className="text-center py-10 animate-bounce">
+                   <div className="text-7xl mb-6 drop-shadow-lg">🎲</div>
+                   <div className="px-6 py-3 bg-gray-100 rounded-2xl border-2 border-dashed border-gray-300">
+                        <h3 className="text-2xl font-black text-gray-800 tracking-tight">{places[currentIndex]?.title}</h3>
+                   </div>
                </div>
            ) : (
                winner && (
-                   <div className="w-full transform transition-all duration-500 animate-bounce-in">
+                   <div className="w-full animate-winner-reveal">
                         <PlaceCard place={winner} isWinner={true} />
                    </div>
                )
@@ -122,12 +106,23 @@ const RouletteModal: React.FC<RouletteModalProps> = ({ places, onClose }) => {
         {!isSpinning && (
           <button
             onClick={onClose}
-            className="mt-8 px-8 py-3 bg-gray-800 text-white font-bold rounded-full hover:bg-gray-700 transition-colors shadow-lg"
+            className="mt-10 w-full py-5 bg-black text-white font-black text-xl rounded-2xl hover:bg-gray-800 transition-all transform hover:scale-105 active:scale-95 shadow-xl"
           >
-            Awesome, Let's Go!
+            SQUAD, LET'S ROLL 🤝
           </button>
         )}
       </div>
+
+      <style>{`
+        @keyframes winner-reveal {
+            0% { transform: scale(0.5) rotate(-20deg); opacity: 0; }
+            70% { transform: scale(1.1) rotate(5deg); }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .animate-winner-reveal {
+            animation: winner-reveal 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+      `}</style>
     </div>
   );
 };
