@@ -1,0 +1,7 @@
+{
+  "name": "Lunch Roulette",
+  "description": "Can't decide where to eat? Let the Lunch Roulette decide for your team. Filters by radius and budget using Google Maps data.",
+  "requestFramePermissions": [
+    "geolocation"
+  ]
+}
