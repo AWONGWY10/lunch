@@ -14,6 +14,11 @@ const PlaceCard: React.FC<PlaceCardProps> = ({
   onToggleBattle,
   isSelectedForBattle = false
 }) => {
+  // Defensive check: ensure these are strings
+  const title = typeof place.title === 'string' ? place.title : String(place.title || "Unknown Place");
+  const description = typeof place.description === 'string' ? place.description : String(place.description || "");
+  const distance = typeof place.distance === 'string' ? place.distance : String(place.distance || "");
+
   return (
     <div 
       className={`relative p-5 rounded-2xl transition-all duration-300 flex flex-col justify-between h-full group ${
@@ -38,20 +43,20 @@ const PlaceCard: React.FC<PlaceCardProps> = ({
       )}
 
       {/* Distance Badge */}
-      {place.distance && (
+      {distance && (
           <div className={`absolute top-4 right-4 text-xs font-bold px-2 py-1 rounded-md ${isWinner ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'}`}>
-              📍 {place.distance}
+              📍 {distance}
           </div>
       )}
       
       <div className="mb-4 pr-12">
         <h4 className={`font-black text-lg mb-2 leading-tight ${isWinner ? 'text-white drop-shadow-md' : 'text-gray-800'}`}>
-          {place.title}
+          {title}
         </h4>
         
-        {place.description && (
+        {description && (
              <p className={`text-sm mb-3 leading-relaxed ${isWinner ? 'text-white/90' : 'text-gray-500 italic'}`}>
-                 "{place.description}"
+                 "{description}"
              </p>
         )}
         
