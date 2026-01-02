@@ -1,8 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { Coordinates, Place, SearchFilters, GroundingChunk } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-
 /**
  * Defensive utility to ensure we never render a raw object in JSX.
  */
@@ -23,23 +21,26 @@ export const findRestaurants = async (
   coords: Coordinates,
   filters: SearchFilters
 ): Promise<{ text: string; places: Place[] }> => {
+  // Always initialize fresh to ensure we use the injected API key from the build process
+  const apiKey = process.env.API_KEY;
+  if (!apiKey || apiKey === "undefined") {
+    throw new Error("API Key is missing. Please check your GitHub repository secrets and ensure 'API_KEY' is set.");
+  }
+  
+  const ai = new GoogleGenAI({ apiKey });
   const modelId = "gemini-2.5-flash";
 
-  // Using a very aggressive prompt to prevent USA/SF hallucinations
+  // Using a cleaner prompt to focus the model on the Maps tool grounding.
+  // We rely on the toolConfig latLng to handle the precise location.
   const prompt = `
-    CURRENT USER COORDINATES: Latitude ${coords.latitude}, Longitude ${coords.longitude}.
-    SEARCH RADIUS: ${filters.radius} meters.
-    TARGET BUDGET: ${filters.budget}.
+    Search for food spots and restaurants near Latitude ${coords.latitude}, Longitude ${coords.longitude}.
+    The user is looking for spots within ${filters.radius} meters.
+    Target Budget: ${filters.budget}.
     
-    CRITICAL LOCALITY GUARD:
-    - You are currently searching EXCLUSIVELY near the coordinates provided above.
-    - DO NOT return "San Francisco", "Mountain View", or "Palo Alto" unless the coordinates are actually there.
-    - If the tool returns results from a different country or city than the user's coordinates, DISCARD THEM.
-    - Focus on results within walking distance (${filters.radius}m).
-    
-    OUTPUT SCHEMA:
-    For every valid local restaurant, write exactly one line in this format:
-    PLACE_METADATA|[Name]|[Distance in Meters]|[1-sentence Brainrot/Gen-Z Review]|END_METADATA
+    CRITICAL: 
+    1. Use the Google Maps tool for ALL results. 
+    2. Provide a short, funny Gen-Z style 'vibe check' for each restaurant found.
+    3. Return local results only.
   `;
 
   try {
@@ -47,56 +48,56 @@ export const findRestaurants = async (
       model: modelId,
       contents: prompt,
       config: {
-        systemInstruction: "You are a hyper-local food scout. You use Google Maps to find restaurants strictly within the user's walking radius. You avoid hallucinations of distant cities. Your tone is funny, Gen-Z, and meme-heavy.",
+        systemInstruction: "You are a local food guide. You use Google Maps to find restaurants near the user. Your tone is funny, high-energy, and Gen-Z (using words like 'bussing', 'no cap', 'vibe', 'lowkey'). Always prioritize grounding results from the Maps tool.",
         tools: [{ googleMaps: {} }],
         toolConfig: {
           retrievalConfig: {
             latLng: {
-              latitude: coords.latitude,
-              longitude: coords.longitude,
-            },
-          },
+              latitude: Number(coords.latitude),
+              longitude: Number(coords.longitude),
+            }
+          }
         },
       },
     });
 
     const text = safeString(response.text);
-    const parsedMetadata = new Map<string, { distance: string, description: string }>();
-    
-    // Parse the custom metadata lines
-    const metaRegex = /PLACE_METADATA\|(.*?)\|(.*?)\|(.*?)\|END_METADATA/g;
-    let match;
-    while ((match = metaRegex.exec(text)) !== null) {
-        parsedMetadata.set(match[1].trim().toLowerCase(), { 
-            distance: match[2].trim(), 
-            description: match[3].trim() 
-        });
-    }
-
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks as GroundingChunk[] || [];
     const places: Place[] = [];
     
+    // We iterate through the grounding chunks to get the actual Google Maps entities
     chunks.forEach((chunk) => {
       if (chunk.maps && chunk.maps.title) {
         const title = safeString(chunk.maps.title);
-        const metadata = parsedMetadata.get(title.toLowerCase());
         
-        // Prevent duplicates and ensure basic valid data
+        // Extract a snippet if available from grounding data
+        const snippet = chunk.maps.placeAnswerSources?.[0]?.reviewSnippets?.[0] 
+                      || "Vibe check: Certified bussing. 100% no cap.";
+
+        // Prevent duplicates
         if (!places.find(p => p.title === title)) {
             places.push({
                 title: title,
                 uri: chunk.maps.uri,
-                distance: metadata?.distance ? safeString(metadata.distance) : "Nearby",
-                description: metadata?.description ? safeString(metadata.description) : "Lowkey bussing, no cap.",
+                distance: "Nearby",
+                description: safeString(snippet),
             });
         }
       }
     });
 
+    console.debug("Grounding Chunks received:", chunks);
+
     return { text, places };
   } catch (error: any) {
-    console.error("Gemini Search Error:", error);
-    // Return empty results instead of throwing to prevent UI crashes
-    return { text: "", places: [] };
+    console.error("Gemini Search Error Details:", error);
+    
+    const message = error?.message || String(error);
+    if (message.includes("403") || message.includes("API_KEY_INVALID")) {
+        throw new Error("Invalid or Restricted API Key. Ensure the key has Gemini API and Google Maps grounding access.");
+    }
+    
+    // For other errors, we throw so the UI can show the specific issue
+    throw error;
   }
 };
