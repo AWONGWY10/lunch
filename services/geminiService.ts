@@ -21,10 +21,12 @@ export const findRestaurants = async (
   coords: Coordinates,
   filters: SearchFilters
 ): Promise<{ text: string; places: Place[] }> => {
-  // Always initialize fresh to ensure we use the injected API key from the build process
-  const apiKey = process.env.API_KEY;
+  // Use Vite's standard env variable access
+  const apiKey = import.meta.env.VITE_API_KEY;
+  
   if (!apiKey || apiKey === "undefined") {
-    throw new Error("API Key is missing. Please check your GitHub repository secrets and ensure 'API_KEY' is set.");
+    console.error("API Key Check Failed. Available env keys:", Object.keys(import.meta.env));
+    throw new Error("API Key is missing. Please check your GitHub repository secrets and ensure 'VITE_API_KEY' is set.");
   }
   
   const ai = new GoogleGenAI({ apiKey });
