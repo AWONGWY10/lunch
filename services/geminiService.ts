@@ -32,16 +32,18 @@ export const findRestaurants = async (
   const ai = new GoogleGenAI({ apiKey });
   const modelId = "gemini-2.5-flash";
 
-  // Using a stronger prompt to force the model to list multiple places using the tool
+  // Refined prompt to strictly enforce Malaysia and distance
   const prompt = `
-    Find at least 5 distinct food spots or restaurants near Latitude ${coords.latitude}, Longitude ${coords.longitude}.
-    Radius: ${filters.radius} meters.
+    Find at least 5 distinct food spots or restaurants in Malaysia.
+    Center your search strictly around Latitude ${coords.latitude}, Longitude ${coords.longitude}.
+    Search Radius: ${filters.radius} meters.
     Budget Vibe: ${filters.budget}.
     
     CRITICAL INSTRUCTIONS:
-    1. You MUST use the 'googleMaps' tool to find real locations.
-    2. Provide a list of places found.
-    3. For each place, write a short, funny Gen-Z style 'vibe check' description.
+    1. You MUST use the 'googleMaps' tool to verify locations.
+    2. ONLY return places located in Malaysia. Do NOT return places in the USA or other countries.
+    3. Ensure places are physically within ${filters.radius} meters of the user.
+    4. For each place, write a short, funny Gen-Z style 'vibe check' description.
   `;
 
   try {
@@ -49,7 +51,7 @@ export const findRestaurants = async (
       model: modelId,
       contents: prompt,
       config: {
-        systemInstruction: "You are a local food guide. Your goal is to find real places using Google Maps and describe them with high-energy, funny Gen-Z slang (e.g. 'bussing', 'no cap', 'mid', 'goated').",
+        systemInstruction: "You are a local Malaysian food guide. You MUST ONLY recommend places inside Malaysia. If a location is not in Malaysia, ignore it. Describe places with high-energy, funny Gen-Z slang (e.g. 'bussing', 'no cap', 'mid', 'goated').",
         tools: [{ googleMaps: {} }],
         toolConfig: {
           retrievalConfig: {
