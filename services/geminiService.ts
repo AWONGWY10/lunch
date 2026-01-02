@@ -3,30 +3,43 @@ import { Coordinates, Place, SearchFilters, GroundingChunk } from "../types";
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
+/**
+ * Defensive utility to ensure we never render a raw object in JSX.
+ */
+const safeString = (val: any, fallback: string = ""): string => {
+  if (val === null || val === undefined) return fallback;
+  if (typeof val === 'string') return val;
+  if (typeof val === 'object') {
+    try {
+      return val.message || val.title || JSON.stringify(val);
+    } catch {
+      return fallback;
+    }
+  }
+  return String(val);
+};
+
 export const findRestaurants = async (
   coords: Coordinates,
   filters: SearchFilters
 ): Promise<{ text: string; places: Place[] }> => {
-  const modelId = "gemini-2.5-flash"; // Required for Maps Grounding
+  const modelId = "gemini-2.5-flash";
 
-  // formatting instruction
+  // Using a very aggressive prompt to prevent USA/SF hallucinations
   const prompt = `
-    I am currently located at LATITUDE: ${coords.latitude}, LONGITUDE: ${coords.longitude}.
+    CURRENT USER COORDINATES: Latitude ${coords.latitude}, Longitude ${coords.longitude}.
+    SEARCH RADIUS: ${filters.radius} meters.
+    TARGET BUDGET: ${filters.budget}.
     
-    Using the Google Maps tool, find 8 REAL restaurants strictly within ${filters.radius} meters of my location.
+    CRITICAL LOCALITY GUARD:
+    - You are currently searching EXCLUSIVELY near the coordinates provided above.
+    - DO NOT return "San Francisco", "Mountain View", or "Palo Alto" unless the coordinates are actually there.
+    - If the tool returns results from a different country or city than the user's coordinates, DISCARD THEM.
+    - Focus on results within walking distance (${filters.radius}m).
     
-    CRITICAL INSTRUCTIONS:
-    1. DO NOT return places from the USA, San Francisco, or Mountain View unless I am actually there.
-    2. Verify the distance. If a place is > ${filters.radius} meters away, discard it.
-    3. Filter by budget: ${filters.budget}.
-    
-    For each valid restaurant, provide the output in this EXACT format per line:
-    PLACE_START|[Name]|[Estimated Walking Distance]|[Funny/Meme-style 1-sentence description]|PLACE_END
-
-    Example:
-    PLACE_START|Joe's Pizza|300m|Pizza so good it slaps harder than my mom.|PLACE_END
-    
-    If no places are found within the radius, return nothing.
+    OUTPUT SCHEMA:
+    For every valid local restaurant, write exactly one line in this format:
+    PLACE_METADATA|[Name]|[Distance in Meters]|[1-sentence Brainrot/Gen-Z Review]|END_METADATA
   `;
 
   try {
@@ -34,6 +47,7 @@ export const findRestaurants = async (
       model: modelId,
       contents: prompt,
       config: {
+        systemInstruction: "You are a hyper-local food scout. You use Google Maps to find restaurants strictly within the user's walking radius. You avoid hallucinations of distant cities. Your tone is funny, Gen-Z, and meme-heavy.",
         tools: [{ googleMaps: {} }],
         toolConfig: {
           retrievalConfig: {
@@ -46,60 +60,43 @@ export const findRestaurants = async (
       },
     });
 
-    const text = response.text || "";
-    
-    // Parse the text response to get metadata
+    const text = safeString(response.text);
     const parsedMetadata = new Map<string, { distance: string, description: string }>();
-    const regex = /PLACE_START\|(.*?)\|(.*?)\|(.*?)\|PLACE_END/g;
-    let match;
     
-    while ((match = regex.exec(text)) !== null) {
-        const name = match[1].trim();
-        const distance = match[2].trim();
-        const description = match[3].trim();
-        // Create a normalized key (lowercase, simple) for matching
-        parsedMetadata.set(name.toLowerCase(), { distance, description });
+    // Parse the custom metadata lines
+    const metaRegex = /PLACE_METADATA\|(.*?)\|(.*?)\|(.*?)\|END_METADATA/g;
+    let match;
+    while ((match = metaRegex.exec(text)) !== null) {
+        parsedMetadata.set(match[1].trim().toLowerCase(), { 
+            distance: match[2].trim(), 
+            description: match[3].trim() 
+        });
     }
 
-    // Extract places from grounding metadata
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks as GroundingChunk[] || [];
-    
     const places: Place[] = [];
     
-    // We filter specifically for MAPS chunks
     chunks.forEach((chunk) => {
-      if (chunk.maps) {
-        const title = chunk.maps.title;
-        // Try to find matching metadata from the text response
-        // We use loose matching because Maps title might differ slightly from Text title
-        let metadata = parsedMetadata.get(title.toLowerCase());
+      if (chunk.maps && chunk.maps.title) {
+        const title = safeString(chunk.maps.title);
+        const metadata = parsedMetadata.get(title.toLowerCase());
         
-        if (!metadata) {
-            // Fallback fuzzy match
-            for (const [key, val] of parsedMetadata.entries()) {
-                if (title.toLowerCase().includes(key) || key.includes(title.toLowerCase())) {
-                    metadata = val;
-                    break;
-                }
-            }
-        }
-
-        // Avoid duplicates
+        // Prevent duplicates and ensure basic valid data
         if (!places.find(p => p.title === title)) {
             places.push({
                 title: title,
                 uri: chunk.maps.uri,
-                distance: metadata?.distance || "Nearby",
-                description: metadata?.description || "Food so good, no cap.",
+                distance: metadata?.distance ? safeString(metadata.distance) : "Nearby",
+                description: metadata?.description ? safeString(metadata.description) : "Lowkey bussing, no cap.",
             });
         }
       }
     });
 
     return { text, places };
-
-  } catch (error) {
-    console.error("Gemini API Error:", error);
-    throw error;
+  } catch (error: any) {
+    console.error("Gemini Search Error:", error);
+    // Return empty results instead of throwing to prevent UI crashes
+    return { text: "", places: [] };
   }
 };
