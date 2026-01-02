@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
-import { Coordinates, BudgetLevel, SearchFilters, Place } from './types';
-import { findRestaurants } from './services/geminiService';
-import FilterPanel from './components/FilterPanel';
-import PlaceCard from './components/PlaceCard';
-import RouletteModal from './components/RouletteModal';
-import Mascot from './components/Mascot';
-import BattleArena from './components/BattleArena';
-import WinnerModal from './components/WinnerModal';
+import { Coordinates, BudgetLevel, SearchFilters, Place } from './types.ts';
+import { findRestaurants } from './services/geminiService.ts';
+import FilterPanel from './components/FilterPanel.tsx';
+import PlaceCard from './components/PlaceCard.tsx';
+import RouletteModal from './components/RouletteModal.tsx';
+import Mascot from './components/Mascot.tsx';
+import BattleArena from './components/BattleArena.tsx';
+import WinnerModal from './components/WinnerModal.tsx';
 
 const App: React.FC = () => {
   const [coords, setCoords] = useState<Coordinates | null>(null);
@@ -38,7 +38,6 @@ const App: React.FC = () => {
         },
         (err) => {
           console.error("Geolocation Error:", err);
-          // Defensive stringification to prevent [object Object]
           const msg = err.message ? String(err.message) : "Location access denied. Please enable GPS! 📍";
           setError(msg);
         }
@@ -64,7 +63,6 @@ const App: React.FC = () => {
       }
     } catch (err: any) {
       console.error("Search Handler Error:", err);
-      // Ensure we only ever set a string to the error state
       const errorMsg = typeof err === 'string' ? err : (err.message ? String(err.message) : "The Lunch Bot fumbled the bag.");
       setError(errorMsg);
     } finally {
