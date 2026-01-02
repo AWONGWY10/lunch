@@ -32,5 +32,8 @@ export interface GroundingChunk {
     uri: string;
     title: string;
     placeId?: string;
+    placeAnswerSources?: Array<{
+      reviewSnippets?: string[];
+    }>;
   };
 }
