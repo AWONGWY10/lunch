@@ -35,7 +35,9 @@ jobs:
       - name: Build project
         run: npm run build
         env:
-          API_KEY: ${{ secrets.API_KEY }}
+          # We map the repository secret 'API_KEY' to the build environment variable 'VITE_API_KEY'
+          # Vite automatically exposes variables starting with VITE_ to the client code.
+          VITE_API_KEY: ${{ secrets.API_KEY }}
 
       - name: Setup Pages
         uses: actions/configure-pages@v4
