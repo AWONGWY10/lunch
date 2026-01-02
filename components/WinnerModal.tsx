@@ -1,6 +1,6 @@
 import React from 'react';
-import { Place } from '../types.ts';
-import PlaceCard from './PlaceCard.tsx';
+import { Place } from '../types';
+import PlaceCard from './PlaceCard';
 
 interface WinnerModalProps {
   winner: Place;
